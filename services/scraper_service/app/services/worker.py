@@ -16,6 +16,29 @@ class ScraperWorker:
     def __init__(self) -> None:
         self.connection: aio_pika.RobustConnection | None = None
 
+    async def publish_price_update(self, item_id: int, current_price: float) -> None:
+        """Відправляє подію з новою ціною назад у core_api для збереження в БД."""
+        if not self.connection or self.connection.is_closed:
+            return
+
+        async with self.connection.channel() as channel:
+            queue = await channel.declare_queue(
+                settings.PRICE_UPDATED_QUEUE_NAME,
+                durable=True,
+            )
+            payload = {"item_id": item_id, "current_price": current_price}
+            message = Message(
+                body=json.dumps(payload).encode("utf-8"),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            )
+            await channel.default_exchange.publish(
+                message,
+                routing_key=queue.name,
+            )
+            logger.info(
+                f"[DB SYNC] Відправлено нову ціну товару #{item_id} -> {current_price}"
+            )
+
     async def publish_alert(self, payload: dict) -> None:
         """Публікує подію зниження ціни для сервісу сповіщень."""
         if not self.connection or self.connection.is_closed:
@@ -26,9 +49,8 @@ class ScraperWorker:
                 settings.NOTIFIER_QUEUE_NAME,
                 durable=True,
             )
-            body = json.dumps(payload).encode("utf-8")
             message = Message(
-                body=body,
+                body=json.dumps(payload).encode("utf-8"),
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             )
             await channel.default_exchange.publish(
@@ -68,7 +90,11 @@ class ScraperWorker:
 
             logger.info(f"Обробка товару #{item_id} завершена. Поточна ціна: {price}")
 
-            # 3. Перевірка критерію сповіщення: ціна досягла або впала нижче бажаної
+            # 3. Синхронізуємо ціну з базою даних core_api
+            if price is not None and item_id is not None:
+                await self.publish_price_update(item_id=item_id, current_price=price)
+
+            # 4. Перевірка критерію сповіщення
             if price is not None and target_price is not None and price <= target_price:
                 alert_payload = {
                     "item_id": item_id,
@@ -80,7 +106,6 @@ class ScraperWorker:
                 await self.publish_alert(alert_payload)
 
     async def start(self) -> None:
-        """Запуск споживача черги скрапінгу."""
         self.connection = await aio_pika.connect_robust(settings.rabbitmq_url)
         channel = await self.connection.channel()
         await channel.set_qos(prefetch_count=5)

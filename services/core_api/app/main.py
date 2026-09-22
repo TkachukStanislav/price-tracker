@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,14 +6,24 @@ from fastapi import FastAPI
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.rabbitmq import rabbitmq_client
+from app.services.price_consumer import price_update_consumer
+from app.services.scheduler import price_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Код ДО yield виконується при старті додатку:
+    # Startup
     await rabbitmq_client.connect()
+    consumer_task = asyncio.create_task(price_update_consumer.start())
+    scheduler_task = asyncio.create_task(price_scheduler.start())
+
     yield
-    # Код ПІСЛЯ yield виконується при зупинці додатку:
+
+    # Shutdown
+    scheduler_task.cancel()
+    price_scheduler.stop()
+    consumer_task.cancel()
+    await price_update_consumer.stop()
     await rabbitmq_client.close()
 
 

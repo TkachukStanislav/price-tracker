@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     RABBITMQ_PORT: int = 5672
     SCRAPER_QUEUE_NAME: str = "price_scraping_tasks"
     NOTIFIER_QUEUE_NAME: str = "price_alert_notifications"
+    PRICE_UPDATED_QUEUE_NAME: str = "price_updated_events"
 
     # Redis
     REDIS_HOST: str = "redis"

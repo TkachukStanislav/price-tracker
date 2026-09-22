@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     RABBITMQ_HOST: str = "rabbitmq"
     RABBITMQ_PORT: int = 5672
     SCRAPER_QUEUE_NAME: str = "price_scraping_tasks"
+    PRICE_UPDATED_QUEUE_NAME: str = "price_updated_events"
 
     model_config = SettingsConfigDict(
         env_file=".env",
