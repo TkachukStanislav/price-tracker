@@ -1,0 +1,103 @@
+version: '3.8'
+
+networks:
+  tracker-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redis_data:
+
+services:
+  # 1. База даних PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: tracker_postgres
+    restart: unless-stopped
+    networks:
+      - tracker-network
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # 2. In-memory кеш Redis
+  redis:
+    image: redis:7-alpine
+    container_name: tracker_redis
+    restart: unless-stopped
+    networks:
+      - tracker-network
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+
+  # 3. Брокер повідомлень RabbitMQ з вебінтерфейсом
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: tracker_rabbitmq
+    restart: unless-stopped
+    networks:
+      - tracker-network
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    ports:
+      - "${RABBITMQ_PORT}:5672"
+      - "${RABBITMQ_UI_PORT}:15672"
+
+  # 4. Головний API-сервіс (Core API)
+  core_api:
+    build: ./services/core_api
+    container_name: tracker_core_api
+    restart: unless-stopped
+    networks:
+      - tracker-network
+    volumes:
+      - ./services/core_api:/app
+    ports:
+      - "${CORE_API_PORT}:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+
+  # 5. Сервіс збору та моніторингу цін
+  scraper_service:
+    build: ./services/scraper_service
+    container_name: tracker_scraper_service
+    restart: unless-stopped
+    networks:
+      - tracker-network
+    volumes:
+      - ./services/scraper_service:/app
+    ports:
+      - "${SCRAPER_PORT}:8001"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - rabbitmq
+
+  # 6. Сервіс сповіщень
+  notifier_service:
+    build: ./services/notifier_service
+    container_name: tracker_notifier_service
+    restart: unless-stopped
+    networks:
+      - tracker-network
+    volumes:
+      - ./services/notifier_service:/app
+    ports:
+      - "${NOTIFIER_PORT}:8002"
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq

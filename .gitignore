@@ -1,0 +1,17 @@
+# Віртуальне оточення
+.venv/
+venv/
+ENV/
+
+# Змінні оточення та секрети
+.env
+*.env
+
+# Кеш Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Docker та логи
+*.log
