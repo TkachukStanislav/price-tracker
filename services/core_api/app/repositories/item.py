@@ -21,7 +21,20 @@ class ItemRepository(BaseRepository[TrackedItem]):
         return result.scalars().all()
 
     async def get_all(self) -> Sequence[TrackedItem]:
-        """Повертає абсолютно всі товари з бази для фонової перевірки цін."""
         query = select(TrackedItem)
         result = await self.session.execute(query)
         return result.scalars().all()
+
+    async def find_similar_by_embedding(
+        self, embedding: list[float], threshold: float = 0.25
+    ) -> TrackedItem | None:
+        distance_expr = TrackedItem.title_embedding.cosine_distance(embedding)
+        query = (
+            select(TrackedItem)
+            .where(TrackedItem.title_embedding.is_not(None))
+            .where(distance_expr < threshold)
+            .order_by(distance_expr)
+            .limit(1)
+        )
+        result = await self.session.execute(query)
+        return result.scalars().first()
