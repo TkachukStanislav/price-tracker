@@ -3,6 +3,13 @@ import asyncio
 from app.core.config import settings
 from app.core.database import Base
 
+from app.core.database import Base
+from app.models.user import User          # <--- обов'язково
+from app.models.item import TrackedItem  # <--- обов'язково
+
+# target_metadata має посилатися на Base.metadata
+target_metadata = Base.metadata
+
 from logging.config import fileConfig
 
 from sqlalchemy import pool

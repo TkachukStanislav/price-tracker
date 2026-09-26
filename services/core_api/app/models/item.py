@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from pgvector.sqlalchemy import Vector
+
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +20,7 @@ class TrackedItem(Base):
     ticker_or_url: Mapped[str] = mapped_column(String(1024), nullable=False)
     target_price: Mapped[float] = mapped_column(Float, nullable=False)
     current_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    title_embedding = mapped_column(Vector(384), nullable=True)
     owner_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
