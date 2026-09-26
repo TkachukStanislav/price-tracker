@@ -1,6 +1,11 @@
 import asyncio
 from contextlib import asynccontextmanager
 
+import os
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi import FastAPI
 
 from app.api.v1 import api_router
@@ -39,5 +44,12 @@ app = FastAPI(
 async def health_check():
     return {"service": "core_api", "status": "online"}
 
+# Віддаємо фронтенд-дашборд на головній сторінці
+@app.get("/", include_in_schema=False)
+async def serve_dashboard():
+    dashboard_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path)
+    return {"message": "Frontend static file not found"}
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
