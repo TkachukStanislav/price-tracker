@@ -1,3 +1,5 @@
+[![CI Pipeline](https://github.com/TkachukStanislav/price-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/TkachukStanislav/price-tracker/actions/workflows/ci.yml)
+
 # ⚡ Distributed Price Tracker & Semantic Deduplication Engine
 
 Подієво-орієнтована мікросервісна система для відстеження цін у реальному часі з автономним семантичним дедуплікатором товарів на базі PostgreSQL (`pgvector`) та локальних ONNX-ембеддингів.
