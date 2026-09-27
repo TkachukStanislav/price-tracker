@@ -1,4 +1,3 @@
-import pytest
 from app.services.embedding_service import embedding_service
 import numpy as np
 
@@ -19,6 +18,7 @@ def test_embedding_output_structure():
 
     # Перевіряємо, що перший елемент є числом з плаваючою крапкою
     assert isinstance(vector[0], float)
+
 
 def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     a = np.array(v1)
@@ -41,12 +41,16 @@ def test_semantic_similarity_deduplication():
     similarity_same = cosine_similarity(vec_a, vec_b)
     similarity_diff = cosine_similarity(vec_a, vec_diff)
 
-# 3. Assert:
+    # 3. Assert:
     # Схожі товари мають високу подібність
-    assert similarity_same > 0.80, f"Очікували високу схожість, отримали {similarity_same}"
+    assert (
+        similarity_same > 0.80
+    ), f"Очікували високу схожість, отримали {similarity_same}"
 
     # Сторонній товар помітно нижчий за порогом
-    assert similarity_diff < 0.65, f"Очікували низьку схожість, отримали {similarity_diff}"
+    assert (
+        similarity_diff < 0.65
+    ), f"Очікували низьку схожість, отримали {similarity_diff}"
 
     # Різниця між схожим і несхожим товаром суттєва (> 0.15)
     assert (similarity_same - similarity_diff) > 0.15

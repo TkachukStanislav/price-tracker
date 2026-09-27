@@ -7,7 +7,10 @@ from app.repositories.item import ItemRepository
 from app.services.embedding_service import embedding_service
 
 try:
-    from app.schemas.item import TrackedItemCreate as ItemCreate, TrackedItemUpdate as ItemUpdate
+    from app.schemas.item import (
+        TrackedItemCreate as ItemCreate,
+        TrackedItemUpdate as ItemUpdate,
+    )
 except ImportError:
     from app.schemas.item import ItemCreate, ItemUpdate
 
@@ -63,12 +66,12 @@ class ItemService:
     async def get_user_items(
         self, owner_id: int, skip: int = 0, limit: int = 100
     ) -> list[TrackedItem]:
-        items = await self.repository.get_by_owner(owner_id=owner_id, skip=skip, limit=limit)
+        items = await self.repository.get_by_owner(
+            owner_id=owner_id, skip=skip, limit=limit
+        )
         return list(items)
 
-    async def update_item(
-        self, item: TrackedItem, item_in: ItemUpdate
-    ) -> TrackedItem:
+    async def update_item(self, item: TrackedItem, item_in: ItemUpdate) -> TrackedItem:
         update_data = item_in.model_dump(exclude_unset=True)
         if "title" in update_data and update_data["title"]:
             update_data["title_embedding"] = embedding_service.generate_embedding(
