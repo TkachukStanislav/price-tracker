@@ -28,8 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio pytest-env httpx fastembed numpy fastapi pydantic-settings email-validator python-jose[cryptography] passlib[bcrypt] bcrypt aio-pika asyncpg python-multipart
-
+          pip install pytest pytest-asyncio pytest-env httpx fastembed numpy fastapi pydantic-settings email-validator "python-jose[cryptography]" "passlib[bcrypt]" bcrypt aio-pika asyncpg python-multipart sqlalchemy pgvector
       # Крок 4: Запускаємо тести з робочої папки сервісу
       - name: Run Pytest
         working-directory: services/core_api
