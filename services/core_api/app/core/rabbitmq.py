@@ -1,11 +1,11 @@
-import json
 import logging
 from typing import Any
 
 import aio_pika
-from aio_pika import Message, RobustConnection
+from aio_pika import RobustConnection
 
 from app.core.config import settings
+from app.core.messaging import build_message, declare_queue_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -36,19 +36,12 @@ class RabbitMQClient:
             await self.connect()
 
         async with self.connection.channel() as channel:
-            # durable=True означає, що черга переживе перезавантаження сервера RabbitMQ
-            queue = await channel.declare_queue(queue_name, durable=True)
-
-            # Перетворюємо словник у JSON-байти
-            message_body = json.dumps(payload).encode("utf-8")
-
-            # PERSISTENT вказує зберегти це повідомлення на диск, а не тільки в RAM
-            message = Message(
-                body=message_body,
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            # Черги durable, повідомлення PERSISTENT: переживуть рестарт RabbitMQ.
+            # Аргументи черги (retry/DLQ) мають збігатися зі споживачем
+            queue = await declare_queue_with_retry(channel, queue_name)
+            await channel.default_exchange.publish(
+                build_message(payload), routing_key=queue.name
             )
-
-            await channel.default_exchange.publish(message, routing_key=queue.name)
             logger.info(f"Завдання надіслано в чергу '{queue_name}': {payload}")
 
 

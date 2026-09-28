@@ -4,6 +4,7 @@ import logging
 from fastembed import TextEmbedding
 
 from app.core.config import settings
+from app.core.metrics import EMBEDDING_DURATION
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,8 @@ class EmbeddingService:
     def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Генерує ембеддинги (по 384 числа) для списку рядків за один прохід."""
         try:
-            return [vector.tolist() for vector in self.model.embed(texts)]
+            with EMBEDDING_DURATION.time():
+                return [vector.tolist() for vector in self.model.embed(texts)]
         except Exception:
             logger.exception("Помилка генерації ембеддингів")
             raise

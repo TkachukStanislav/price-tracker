@@ -7,8 +7,15 @@ from app.core.config import settings
 from app.core.rabbitmq import rabbitmq_client
 from app.models.item import TrackedItem
 from app.repositories.item import ItemRepository
-from app.schemas.item import TrackedItemCreate, TrackedItemUpdate
+from app.schemas.item import (
+    SimilarItemResponse,
+    TrackedItemCreate,
+    TrackedItemResponse,
+    TrackedItemUpdate,
+)
 from app.services.embedding_service import embedding_service
+from app.services.price_checks import build_scrape_task_payload
+from app.services.similar_cache import SimilarItemsCache
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +26,12 @@ SIMILARITY_MAX_DISTANCE = 0.35
 
 
 class ItemService:
-    def __init__(self, session_or_repo: AsyncSession | ItemRepository) -> None:
+    def __init__(
+        self,
+        session_or_repo: AsyncSession | ItemRepository,
+        similar_cache: SimilarItemsCache | None = None,
+    ) -> None:
+        self.similar_cache = similar_cache
         if isinstance(session_or_repo, AsyncSession):
             self.repository = ItemRepository(session_or_repo)
             self.session = session_or_repo
@@ -44,13 +56,9 @@ class ItemService:
         # 3. Dispatch scraper event
         await rabbitmq_client.publish_message(
             queue_name=settings.SCRAPER_QUEUE_NAME,
-            payload={
-                "item_id": item.id,
-                "ticker_or_url": item.ticker_or_url,
-                "target_price": item.target_price,
-                "owner_id": item.owner_id,
-            },
+            payload=build_scrape_task_payload(item),
         )
+        await self._invalidate_similar_cache(owner_id)
         return item
 
     async def get_item_by_id(self, item_id: int, owner_id: int) -> TrackedItem:
@@ -72,15 +80,32 @@ class ItemService:
 
     async def get_similar_items(
         self, item_id: int, owner_id: int, limit: int
-    ) -> list[dict]:
+    ) -> list[SimilarItemResponse]:
+        # Перевірка власника — завжди, навіть якщо результат є в кеші
         item = await self.get_item_by_id(item_id=item_id, owner_id=owner_id)
+
+        cache = self.similar_cache
+        cache_key = await cache.build_key(owner_id, item_id, limit) if cache else None
+        if cache and (cached := await cache.get(cache_key)) is not None:
+            return cached
+
         similar = await self.repository.find_similar(
             item, max_distance=SIMILARITY_MAX_DISTANCE, limit=limit
         )
-        return [
-            {"item": similar_item, "distance": distance}
+        results = [
+            SimilarItemResponse(
+                item=TrackedItemResponse.model_validate(similar_item),
+                distance=distance,
+            )
             for similar_item, distance in similar
         ]
+        if cache:
+            await cache.set(cache_key, results)
+        return results
+
+    async def _invalidate_similar_cache(self, owner_id: int) -> None:
+        if self.similar_cache:
+            await self.similar_cache.invalidate(owner_id)
 
     async def update_item(
         self, item_id: int, item_in: TrackedItemUpdate, owner_id: int
@@ -92,8 +117,11 @@ class ItemService:
             new_title = update_data["title"]
             embedding = await embedding_service.generate_embedding_async(new_title)
             update_data["title_embedding"] = embedding
-        return await self.repository.update(item, **update_data)
+        item = await self.repository.update(item, **update_data)
+        await self._invalidate_similar_cache(owner_id)
+        return item
 
     async def delete_item(self, item_id: int, owner_id: int) -> None:
         item = await self.get_item_by_id(item_id=item_id, owner_id=owner_id)
         await self.repository.delete(item)
+        await self._invalidate_similar_cache(owner_id)

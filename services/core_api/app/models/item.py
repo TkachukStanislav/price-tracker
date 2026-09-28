@@ -28,6 +28,10 @@ class TrackedItem(Base):
     ticker_or_url: Mapped[str] = mapped_column(String(1024), nullable=False)
     target_price: Mapped[float] = mapped_column(Float, nullable=False)
     current_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Коли scraper отримав current_price. Оновлення зі старішим часом ігноруються
+    price_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     title_embedding = mapped_column(Vector(384), nullable=True)
     owner_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
