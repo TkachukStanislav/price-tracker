@@ -6,6 +6,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Price Tracker - Core API"
     API_V1_STR: str = "/api/v1"
 
+    # Логи: json у продакшені, text у розробці (див. docker-compose.override.yml)
+    LOG_FORMAT: str = "text"
+    LOG_LEVEL: str = "INFO"
+
     # Безпека / JWT
     # Без значення за замовчуванням: якщо ключ не задано, сервіс не стартує.
     # Дефолтний ключ у коді дозволив би будь-кому підробити JWT

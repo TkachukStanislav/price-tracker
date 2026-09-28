@@ -1,13 +1,16 @@
 # Налаштування для розробки. Docker Compose підключає цей файл автоматично
 # поверх docker-compose.yml при звичайному `docker compose up`:
 #   * код монтується з диска, тож зміни видно без перезбирання образу;
-#   * HTTP-сервіси перезапускаються при зміні файлів (--reload).
+#   * HTTP-сервіси перезапускаються при зміні файлів (--reload);
+#   * логи звичайним текстом замість JSON — так їх зручніше читати.
 # Фонові процеси (consumer, Celery) після зміни коду треба перезапустити:
 #   docker compose restart price_consumer celery_worker celery_beat
 
 x-core-code: &core-code
   volumes:
     - ./services/core_api:/app
+  environment:
+    LOG_FORMAT: text
 
 services:
   migrate:
@@ -29,9 +32,13 @@ services:
   scraper_service:
     volumes:
       - ./services/scraper_service:/app
+    environment:
+      LOG_FORMAT: text
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
 
   notifier_service:
     volumes:
       - ./services/notifier_service:/app
+    environment:
+      LOG_FORMAT: text
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]

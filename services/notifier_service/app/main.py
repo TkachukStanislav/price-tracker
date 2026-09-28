@@ -1,16 +1,13 @@
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.services.worker import notification_worker
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+setup_logging("notifier_service", settings.LOG_FORMAT, settings.LOG_LEVEL)
 
 
 @asynccontextmanager

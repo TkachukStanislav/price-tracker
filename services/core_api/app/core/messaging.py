@@ -103,10 +103,14 @@ async def handle_with_retry(
     черзі повторів. Якщо процес впаде між цими кроками, повідомлення прийде
     ще раз — тому обробники мають бути ідемпотентними.
     """
+    # Поля для пошуку в JSON-логах: усі записи про одне повідомлення
+    log_fields = {"queue": queue_name, "message_id": message.message_id}
     try:
         await handler(message)
     except PermanentMessageError:
-        logger.exception("Повідомлення %s не можна обробити", message.message_id)
+        logger.exception(
+            "Повідомлення %s не можна обробити", message.message_id, extra=log_fields
+        )
         MESSAGES_DEAD_LETTERED.labels(queue_name).inc()
         await message.reject(requeue=False)
         return
@@ -117,6 +121,7 @@ async def handle_with_retry(
                 "Повідомлення %s: вичерпано %d спроб, відправляю в DLQ",
                 message.message_id,
                 MAX_RETRIES,
+                extra=log_fields,
             )
             MESSAGES_DEAD_LETTERED.labels(queue_name).inc()
             await message.reject(requeue=False)
@@ -129,6 +134,7 @@ async def handle_with_retry(
             MAX_RETRIES,
             RETRY_DELAY_MS,
             exc_info=True,
+            extra={**log_fields, "attempt": attempt},
         )
         retry_message = aio_pika.Message(
             body=message.body,

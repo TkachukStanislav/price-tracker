@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import async_session_maker
+from app.core.logging import setup_logging
 from app.core.messaging import (
     PermanentMessageError,
     declare_queue_with_retry,
@@ -102,10 +103,7 @@ price_update_consumer = PriceUpdateConsumer()
 
 
 async def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_logging("price_consumer", settings.LOG_FORMAT, settings.LOG_LEVEL)
     # docker stop надсилає SIGTERM: коректно закриваємо з'єднання
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()

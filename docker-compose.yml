@@ -25,6 +25,7 @@ x-core-app: &core-app
     - .env
   environment:
     EMBEDDING_CACHE_DIR: /models
+    LOG_FORMAT: json
   depends_on:
     db:
       condition: service_healthy
@@ -159,6 +160,8 @@ services:
       - "${SCRAPER_PORT}:8001"
     env_file:
       - .env
+    environment:
+      LOG_FORMAT: json
     depends_on:
       redis:
         condition: service_healthy
@@ -179,6 +182,8 @@ services:
       - "${NOTIFIER_PORT}:8002"
     env_file:
       - .env
+    environment:
+      LOG_FORMAT: json
     depends_on:
       redis:
         condition: service_healthy
