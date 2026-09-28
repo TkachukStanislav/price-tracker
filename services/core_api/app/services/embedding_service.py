@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastembed import TextEmbedding
@@ -18,6 +19,10 @@ class EmbeddingService:
         except Exception:
             logger.exception("Помилка генерації ембеддингу")
             raise
+
+    async def generate_embedding_async(self, text: str) -> list[float]:
+        """Рахує ембеддинг в окремому потоці, щоб не блокувати event loop."""
+        return await asyncio.to_thread(self.generate_embedding, text)
 
 
 embedding_service = EmbeddingService()

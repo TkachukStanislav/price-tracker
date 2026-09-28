@@ -55,3 +55,12 @@ def test_semantic_similarity_deduplication():
 
     # Різниця між схожим і несхожим товаром суттєва (> 0.15)
     assert (similarity_same - similarity_diff) > 0.15
+
+
+async def test_async_embedding_matches_sync():
+    text = "Apple iPhone 15 Pro 128GB"
+
+    sync_vector = embedding_service.generate_embedding(text)
+    async_vector = await embedding_service.generate_embedding_async(text)
+
+    assert async_vector == sync_vector
