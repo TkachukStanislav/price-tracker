@@ -32,6 +32,14 @@ class TrackedItemResponse(TrackedItemBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Запис історії цін
+class PriceHistoryResponse(BaseModel):
+    price: float
+    checked_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Схожий товар разом із косинусною відстанню до вихідного
 class SimilarItemResponse(BaseModel):
     item: TrackedItemResponse

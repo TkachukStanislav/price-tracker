@@ -68,5 +68,5 @@ class ItemRepository(BaseRepository[TrackedItem]):
             )
             .values(current_price=price, price_checked_at=checked_at)
         )
-        await self.session.commit()
+        # Без commit: транзакцією керує той, хто викликає (разом з історією цін)
         return result.rowcount > 0

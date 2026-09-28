@@ -24,6 +24,7 @@ from app.core.messaging import (
     parse_json,
 )
 from app.repositories.item import ItemRepository
+from app.repositories.price_history import PriceHistoryRepository
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,11 @@ async def apply_price_update(session: AsyncSession, payload: dict[str, Any]) -> 
 
     repo = ItemRepository(session)
     if await repo.update_price_if_newer(item_id, price, checked_at):
+        # Та сама транзакція: або оновлено і ціну, і історію, або нічого
+        await PriceHistoryRepository(session).add_if_changed(item_id, price, checked_at)
+        await session.commit()
         return "updated"
+    await session.rollback()
     if await repo.get_by_id(item_id) is None:
         return "item_not_found"
     return "stale"

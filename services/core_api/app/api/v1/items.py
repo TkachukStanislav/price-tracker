@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.api.deps import get_current_user, get_item_service
 from app.models.user import User
 from app.schemas.item import (
+    PriceHistoryResponse,
     SimilarItemResponse,
     TrackedItemCreate,
     TrackedItemResponse,
@@ -70,6 +71,22 @@ async def read_similar_items(
 ):
     """Повертає схожі за назвою товари поточного користувача (векторний пошук)."""
     return await item_service.get_similar_items(
+        item_id=item_id, owner_id=current_user.id, limit=limit
+    )
+
+
+@router.get(
+    "/{item_id}/price-history",
+    response_model=list[PriceHistoryResponse],
+)
+async def read_price_history(
+    item_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    item_service: Annotated[ItemService, Depends(get_item_service)],
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+):
+    """Історія змін ціни товару, найновіші спочатку."""
+    return await item_service.get_price_history(
         item_id=item_id, owner_id=current_user.id, limit=limit
     )
 
