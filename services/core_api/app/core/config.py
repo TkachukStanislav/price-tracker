@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -5,8 +6,14 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Price Tracker - Core API"
     API_V1_STR: str = "/api/v1"
 
+    # Логи: json у продакшені, text у розробці (див. docker-compose.override.yml)
+    LOG_FORMAT: str = "text"
+    LOG_LEVEL: str = "INFO"
+
     # Безпека / JWT
-    SECRET_KEY: str = "super-secret-key-change-in-production-1234567890"
+    # Без значення за замовчуванням: якщо ключ не задано, сервіс не стартує.
+    # Дефолтний ключ у коді дозволив би будь-кому підробити JWT
+    SECRET_KEY: str = Field(min_length=32)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 день
 

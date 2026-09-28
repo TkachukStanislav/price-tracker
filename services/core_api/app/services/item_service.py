@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.rabbitmq import rabbitmq_client
 from app.models.item import TrackedItem
+from app.models.price_history import PriceHistory
 from app.repositories.item import ItemRepository
+from app.repositories.price_history import PriceHistoryRepository
 from app.schemas.item import (
     SimilarItemResponse,
     TrackedItemCreate,
@@ -102,6 +104,15 @@ class ItemService:
         if cache:
             await cache.set(cache_key, results)
         return results
+
+    async def get_price_history(
+        self, item_id: int, owner_id: int, limit: int
+    ) -> list[PriceHistory]:
+        await self.get_item_by_id(item_id=item_id, owner_id=owner_id)
+        history = await PriceHistoryRepository(self.session).get_for_item(
+            item_id, limit
+        )
+        return list(history)
 
     async def _invalidate_similar_cache(self, owner_id: int) -> None:
         if self.similar_cache:

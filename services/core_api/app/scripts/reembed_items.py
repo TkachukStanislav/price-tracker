@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import async_session_maker
+from app.core.logging import setup_logging
 from app.models.item import TrackedItem
 from app.services.embedding_service import embedding_service
 
@@ -55,7 +56,7 @@ async def reembed_all_items(session: AsyncSession, batch_size: int = BATCH_SIZE)
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    setup_logging("reembed_items", settings.LOG_FORMAT, settings.LOG_LEVEL)
     logger.info("Модель: %s", settings.EMBEDDING_MODEL)
     async with async_session_maker() as session:
         total = await reembed_all_items(session)

@@ -1,18 +1,15 @@
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.core.redis import redis_client
 from app.services.worker import scraper_worker
 
 # Explicitly display INFO-level logs in Docker
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+setup_logging("scraper_service", settings.LOG_FORMAT, settings.LOG_LEVEL)
 
 
 @asynccontextmanager

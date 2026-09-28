@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 from httpx import AsyncClient
@@ -5,6 +6,7 @@ from httpx import AsyncClient
 from app.core.config import settings
 from app.repositories.item import ItemRepository
 from app.services.item_service import SIMILARITY_MAX_DISTANCE
+from app.services.price_consumer import apply_price_update
 
 AUTH_PREFIX = f"{settings.API_V1_STR}/auth"
 ITEMS_PREFIX = f"{settings.API_V1_STR}/items"
@@ -235,3 +237,37 @@ async def test_similar_cache_is_invalidated_on_new_item(client: AsyncClient):
 
     results = (await client.get(url, headers=headers)).json()
     assert [result["item"]["id"] for result in results] == [new_item["id"]]
+
+
+async def test_price_history_endpoint(client: AsyncClient, db_session):
+    headers = await get_auth_headers(client, "history_owner@example.com")
+    item = await create_item(client, headers)
+    now = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+    for minute, price in enumerate([1000.0, 950.0, 900.0]):
+        await apply_price_update(
+            db_session,
+            {
+                "item_id": item["id"],
+                "current_price": price,
+                "checked_at": (now + timedelta(minutes=minute)).isoformat(),
+            },
+        )
+
+    response = await client.get(
+        f"{ITEMS_PREFIX}/{item['id']}/price-history?limit=2", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert [entry["price"] for entry in response.json()] == [900.0, 950.0]
+
+
+async def test_price_history_of_another_user_returns_404(client: AsyncClient):
+    owner_headers = await get_auth_headers(client, "hist_owner@example.com")
+    intruder_headers = await get_auth_headers(client, "hist_intruder@example.com")
+    item = await create_item(client, owner_headers)
+
+    response = await client.get(
+        f"{ITEMS_PREFIX}/{item['id']}/price-history", headers=intruder_headers
+    )
+
+    assert response.status_code == 404

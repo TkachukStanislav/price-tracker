@@ -7,8 +7,11 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.v1 import api_router
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.core.metrics import PrometheusMiddleware
 from app.core.rabbitmq import rabbitmq_client
+
+setup_logging("core_api", settings.LOG_FORMAT, settings.LOG_LEVEL)
 
 
 @asynccontextmanager

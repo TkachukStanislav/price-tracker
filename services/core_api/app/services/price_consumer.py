@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import async_session_maker
+from app.core.logging import setup_logging
 from app.core.messaging import (
     PermanentMessageError,
     declare_queue_with_retry,
@@ -24,6 +25,7 @@ from app.core.messaging import (
     parse_json,
 )
 from app.repositories.item import ItemRepository
+from app.repositories.price_history import PriceHistoryRepository
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,11 @@ async def apply_price_update(session: AsyncSession, payload: dict[str, Any]) -> 
 
     repo = ItemRepository(session)
     if await repo.update_price_if_newer(item_id, price, checked_at):
+        # Та сама транзакція: або оновлено і ціну, і історію, або нічого
+        await PriceHistoryRepository(session).add_if_changed(item_id, price, checked_at)
+        await session.commit()
         return "updated"
+    await session.rollback()
     if await repo.get_by_id(item_id) is None:
         return "item_not_found"
     return "stale"
@@ -97,10 +103,7 @@ price_update_consumer = PriceUpdateConsumer()
 
 
 async def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_logging("price_consumer", settings.LOG_FORMAT, settings.LOG_LEVEL)
     # docker stop надсилає SIGTERM: коректно закриваємо з'єднання
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()

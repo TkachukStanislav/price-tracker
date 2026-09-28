@@ -6,8 +6,10 @@
 """
 
 from celery import Celery
+from celery.signals import setup_logging as celery_setup_logging
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 
 celery_app = Celery(
     "core_api",
@@ -33,3 +35,9 @@ celery_app.conf.update(
         },
     },
 )
+
+
+@celery_setup_logging.connect
+def configure_logging(**kwargs) -> None:
+    """Celery не чіпає логування сам, якщо є обробник цього сигналу."""
+    setup_logging("celery", settings.LOG_FORMAT, settings.LOG_LEVEL)

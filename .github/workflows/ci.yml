@@ -8,6 +8,25 @@ on:
 
 jobs:
   # ================= CI: ТЕСТУВАННЯ =================
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Lint and format check
+        run: |
+          pip install ruff==0.16.9
+          ruff check services
+          ruff format --check services
+
   test:
     name: Run Pytest Suite
     runs-on: ubuntu-latest
@@ -40,8 +59,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r services/core_api/requirements.txt
-          pip install pytest pytest-asyncio pytest-env httpx greenlet fakeredis
+          pip install -r services/core_api/requirements-dev.txt
 
       # Модель ембеддингів (~220 МБ) кешується між запусками CI
       - name: Cache embedding model
@@ -76,8 +94,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r services/scraper_service/requirements.txt
-          pip install pytest pytest-asyncio
+          pip install -r services/scraper_service/requirements-dev.txt
 
       - name: Run Pytest
         working-directory: services/scraper_service
@@ -100,8 +117,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r services/notifier_service/requirements.txt
-          pip install pytest pytest-asyncio fakeredis
+          pip install -r services/notifier_service/requirements-dev.txt
 
       - name: Run Pytest
         working-directory: services/notifier_service
@@ -110,7 +126,7 @@ jobs:
   # ================= CD: ЗБІРКА ТА ПУБЛІКАЦІЯ ОБРАЗІВ =================
   build-images:
     name: Build & Push Docker Images
-    needs: [test, test-scraper, test-notifier]
+    needs: [lint, test, test-scraper, test-notifier]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -152,3 +168,7 @@ jobs:
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Кеш шарів Docker між запусками: якщо requirements не змінились,
+          # шар з pip install береться з кешу і збірка займає секунди
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

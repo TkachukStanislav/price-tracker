@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-env==1.7.1
+httpx==0.28.1
+fakeredis>=2.23,<3
+ruff==0.16.9

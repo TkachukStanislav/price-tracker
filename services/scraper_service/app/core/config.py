@@ -4,6 +4,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Price Tracker - Scraper Service"
 
+    # Логи: json у продакшені, text у розробці (див. docker-compose.override.yml)
+    LOG_FORMAT: str = "text"
+    LOG_LEVEL: str = "INFO"
+
     # RabbitMQ
     RABBITMQ_USER: str = "guest"
     RABBITMQ_PASSWORD: str = "guest"
