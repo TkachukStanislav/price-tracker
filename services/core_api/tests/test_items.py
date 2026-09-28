@@ -159,3 +159,45 @@ async def test_delete_item_of_another_user_returns_404(client: AsyncClient):
 
     assert delete_response.status_code == 404
     assert get_response.status_code == 200
+
+
+async def test_similar_items_returns_close_own_items(client: AsyncClient):
+    headers = await get_auth_headers(client, "similar_owner@example.com")
+    other_headers = await get_auth_headers(client, "similar_other@example.com")
+    source = await create_item(client, headers, title="Apple iPhone 15 Pro 128GB")
+    close = await create_item(client, headers, title="Apple iPhone 15 Pro 256GB")
+    await create_item(client, headers, title="Samsung washing machine 7kg")
+    await create_item(client, other_headers, title="Apple iPhone 15 Pro 128GB Black")
+
+    response = await client.get(
+        f"{ITEMS_PREFIX}/{source['id']}/similar", headers=headers
+    )
+
+    assert response.status_code == 200
+    results = response.json()
+    # Лише схожий товар цього ж користувача: без себе, пральки і чужого iPhone
+    assert [result["item"]["id"] for result in results] == [close["id"]]
+    assert 0 <= results[0]["distance"] < 0.25
+
+
+async def test_similar_items_of_another_user_returns_404(client: AsyncClient):
+    owner_headers = await get_auth_headers(client, "sim_idor_owner@example.com")
+    intruder_headers = await get_auth_headers(client, "sim_idor_intruder@example.com")
+    item = await create_item(client, owner_headers)
+
+    response = await client.get(
+        f"{ITEMS_PREFIX}/{item['id']}/similar", headers=intruder_headers
+    )
+
+    assert response.status_code == 404
+
+
+async def test_similar_items_rejects_invalid_limit(client: AsyncClient):
+    headers = await get_auth_headers(client, "sim_limit@example.com")
+    item = await create_item(client, headers)
+
+    response = await client.get(
+        f"{ITEMS_PREFIX}/{item['id']}/similar?limit=0", headers=headers
+    )
+
+    assert response.status_code == 422

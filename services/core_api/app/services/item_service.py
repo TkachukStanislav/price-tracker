@@ -12,6 +12,9 @@ from app.services.embedding_service import embedding_service
 
 logger = logging.getLogger(__name__)
 
+# Косинусна відстань: 0 — однакові за змістом, 1 — не пов'язані, 2 — протилежні
+SIMILARITY_MAX_DISTANCE = 0.25
+
 
 class ItemService:
     def __init__(self, session_or_repo: AsyncSession | ItemRepository) -> None:
@@ -28,17 +31,7 @@ class ItemService:
         # 1. Generate text embedding
         embedding = await embedding_service.generate_embedding_async(item_in.title)
 
-        # 2. Semantic deduplication check
-        similar_item = await self.repository.find_similar_by_embedding(
-            embedding=embedding, threshold=0.25
-        )
-        if similar_item:
-            logger.info(
-                f"[AI DEDUPLICATION] Duplicate detected! "
-                f"New: '{item_in.title}' matches ID={similar_item.id} ('{similar_item.title}')"
-            )
-
-        # 3. Create record with embedding
+        # 2. Create record with embedding
         item_data = item_in.model_dump()
         item = await self.repository.create(
             **item_data,
@@ -46,7 +39,7 @@ class ItemService:
             title_embedding=embedding,
         )
 
-        # 4. Dispatch scraper event
+        # 3. Dispatch scraper event
         await rabbitmq_client.publish_message(
             queue_name=settings.SCRAPER_QUEUE_NAME,
             payload={
@@ -74,6 +67,18 @@ class ItemService:
             owner_id=owner_id, skip=skip, limit=limit
         )
         return list(items)
+
+    async def get_similar_items(
+        self, item_id: int, owner_id: int, limit: int
+    ) -> list[dict]:
+        item = await self.get_item_by_id(item_id=item_id, owner_id=owner_id)
+        similar = await self.repository.find_similar(
+            item, max_distance=SIMILARITY_MAX_DISTANCE, limit=limit
+        )
+        return [
+            {"item": similar_item, "distance": distance}
+            for similar_item, distance in similar
+        ]
 
     async def update_item(
         self, item_id: int, item_in: TrackedItemUpdate, owner_id: int

@@ -29,3 +29,9 @@ class TrackedItemResponse(TrackedItemBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Схожий товар разом із косинусною відстанню до вихідного
+class SimilarItemResponse(BaseModel):
+    item: TrackedItemResponse
+    distance: float
