@@ -1,6 +1,6 @@
-import asyncio
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -18,11 +18,12 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await redis_client.connect()
-    worker_task = asyncio.create_task(scraper_worker.start())
+    # Не create_task: якщо підключитися до черги не вдалося, сервіс має впасти
+    # на старті, а не працювати «здоровим» без споживача
+    await scraper_worker.start()
 
     yield
 
-    worker_task.cancel()
     await scraper_worker.stop()
     await redis_client.close()
 

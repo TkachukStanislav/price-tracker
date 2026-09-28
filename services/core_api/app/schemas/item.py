@@ -25,6 +25,7 @@ class TrackedItemResponse(TrackedItemBase):
     id: int
     owner_id: int
     current_price: float | None = None
+    price_checked_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -16,6 +16,8 @@ HEADERS = {
     )
 }
 PRICE_CLASS_PATTERN = re.compile(r"price|product-price|cost", re.IGNORECASE)
+# Сервер перевантажений або обмежує частоту запитів: варто повторити пізніше
+TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 def parse_price(raw_text: str) -> float | None:
@@ -28,21 +30,44 @@ def parse_price(raw_text: str) -> float | None:
     return float(match.group().replace(",", "."))
 
 
+class TemporaryScrapeError(Exception):
+    """Тимчасова помилка (таймаут, 5xx, 429): має сенс спробувати пізніше."""
+
+
 class PriceScraper:
     @staticmethod
-    async def fetch_price(ticker_or_url: str) -> float | None:
-        """Повертає ціну зі сторінки або None, якщо отримати її не вдалося."""
+    async def fetch_price(
+        ticker_or_url: str, client: httpx.AsyncClient | None = None
+    ) -> float | None:
+        """Повертає ціну зі сторінки або None, якщо на сторінці її немає.
+
+        Тимчасові мережеві збої піднімають TemporaryScrapeError, щоб
+        повідомлення пішло на повтор. Постійні (404, немає ціни) дають None.
+        """
         if not ticker_or_url.startswith(("http://", "https://")):
             logger.warning("Непідтримуване джерело ціни: %s", ticker_or_url)
             SCRAPE_RESULTS.labels("unsupported").inc()
             return None
 
+        http = client or httpx.AsyncClient(timeout=10.0, follow_redirects=True)
         try:
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                response = await client.get(ticker_or_url, headers=HEADERS)
-                response.raise_for_status()
-        except httpx.HTTPError as e:
-            logger.warning("Не вдалося завантажити %s: %s", ticker_or_url, e)
+            response = await http.get(ticker_or_url, headers=HEADERS)
+        except httpx.TransportError as e:
+            SCRAPE_RESULTS.labels("temporary_error").inc()
+            raise TemporaryScrapeError(f"{ticker_or_url}: {e!r}") from e
+        finally:
+            if client is None:
+                await http.aclose()
+
+        if response.status_code in TEMPORARY_STATUS_CODES:
+            SCRAPE_RESULTS.labels("temporary_error").inc()
+            raise TemporaryScrapeError(f"{ticker_or_url}: HTTP {response.status_code}")
+        if response.is_error:
+            logger.warning(
+                "Не вдалося завантажити %s: HTTP %s",
+                ticker_or_url,
+                response.status_code,
+            )
             SCRAPE_RESULTS.labels("fetch_error").inc()
             return None
 

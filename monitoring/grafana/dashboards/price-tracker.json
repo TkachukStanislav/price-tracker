@@ -368,7 +368,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (queue) (rabbitmq_queue_messages_ready{queue!~\".*pidbox|celeryev.*\"})",
+          "expr": "sum by (queue) (rabbitmq_queue_messages_ready{queue!~\".*pidbox|celeryev.*|.*[.]dlq|.*[.]retry\"})",
           "legendFormat": "{{queue}}"
         }
       ]
@@ -423,8 +423,17 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(notifications_sent_total[5m]))",
+          "expr": "sum(rate(notifications_total{result=\"sent\"}[5m]))",
           "legendFormat": "надіслано"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(notifications_total{result=\"duplicate\"}[5m]))",
+          "legendFormat": "дублікати (пропущено)"
         }
       ]
     },
@@ -471,6 +480,157 @@
           },
           "expr": "histogram_quantile(0.95, sum by (le) (rate(embedding_duration_seconds_bucket[5m])))",
           "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Надійність",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 13,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 14,
+      "title": "Повтори обробки",
+      "description": "Повідомлення, що впали й відправлені в <черга>.retry",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 28
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (queue) (increase(messages_retried_total[5m]))",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 15,
+      "title": "Відправлено в DLQ",
+      "description": "Не вдалося обробити за всі спроби або повідомлення некоректне",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 28
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (queue) (increase(messages_dead_lettered_total[5m]))",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 16,
+      "title": "Повідомлень у DLQ",
+      "description": "Мають бути нулі. Якщо ні — дивіться повідомлення в RabbitMQ UI",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 28
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (queue) (rabbitmq_queue_messages{queue=~\".*[.]dlq\"})",
+          "legendFormat": "{{queue}}"
         }
       ]
     }

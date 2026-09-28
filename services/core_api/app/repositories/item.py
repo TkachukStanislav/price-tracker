@@ -1,6 +1,7 @@
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 
 from app.models.item import TrackedItem
 from app.repositories.base import BaseRepository
@@ -46,3 +47,26 @@ class ItemRepository(BaseRepository[TrackedItem]):
         )
         result = await self.session.execute(query)
         return [(row.TrackedItem, row.distance) for row in result]
+
+    async def update_price_if_newer(
+        self, item_id: int, price: float, checked_at: datetime
+    ) -> bool:
+        """Оновлює ціну, лише якщо подія новіша за збережену. Повертає, чи оновлено.
+
+        Перевірка і запис — один UPDATE ... WHERE, тому два споживачі, що
+        одночасно обробляють події одного товару, не перезапишуть новішу ціну
+        старішою (на відміну від «прочитати, порівняти, записати»).
+        """
+        result = await self.session.execute(
+            update(TrackedItem)
+            .where(TrackedItem.id == item_id)
+            .where(
+                or_(
+                    TrackedItem.price_checked_at.is_(None),
+                    TrackedItem.price_checked_at < checked_at,
+                )
+            )
+            .values(current_price=price, price_checked_at=checked_at)
+        )
+        await self.session.commit()
+        return result.rowcount > 0

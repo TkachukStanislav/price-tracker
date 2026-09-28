@@ -130,6 +130,7 @@ services:
       - .env
     depends_on:
       - rabbitmq
+      - redis
 
   # 7. Prometheus: збирає метрики з усіх сервісів і RabbitMQ
   prometheus:

@@ -1,6 +1,6 @@
-import asyncio
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -15,9 +15,10 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    worker_task = asyncio.create_task(notification_worker.start())
+    # Не create_task: якщо підключитися до черги не вдалося, сервіс має впасти
+    # на старті, а не працювати «здоровим» без споживача
+    await notification_worker.start()
     yield
-    worker_task.cancel()
     await notification_worker.stop()
 
 

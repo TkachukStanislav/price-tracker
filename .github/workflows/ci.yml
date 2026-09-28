@@ -83,10 +83,34 @@ jobs:
         working-directory: services/scraper_service
         run: pytest -v
 
+  test-notifier:
+    name: Run Notifier Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r services/notifier_service/requirements.txt
+          pip install pytest pytest-asyncio fakeredis
+
+      - name: Run Pytest
+        working-directory: services/notifier_service
+        run: pytest -v
+
   # ================= CD: ЗБІРКА ТА ПУБЛІКАЦІЯ ОБРАЗІВ =================
   build-images:
     name: Build & Push Docker Images
-    needs: [test, test-scraper]
+    needs: [test, test-scraper, test-notifier]
     runs-on: ubuntu-latest
     permissions:
       contents: read
