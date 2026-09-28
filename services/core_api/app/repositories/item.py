@@ -1,5 +1,7 @@
 from collections.abc import Sequence
+
 from sqlalchemy import select
+
 from app.models.item import TrackedItem
 from app.repositories.base import BaseRepository
 

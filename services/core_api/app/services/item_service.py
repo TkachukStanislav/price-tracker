@@ -1,18 +1,14 @@
 import logging
+
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.core.rabbitmq import rabbitmq_client
 from app.models.item import TrackedItem
 from app.repositories.item import ItemRepository
+from app.schemas.item import TrackedItemCreate, TrackedItemUpdate
 from app.services.embedding_service import embedding_service
-
-try:
-    from app.schemas.item import (
-        TrackedItemCreate as ItemCreate,
-        TrackedItemUpdate as ItemUpdate,
-    )
-except ImportError:
-    from app.schemas.item import ItemCreate, ItemUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +22,9 @@ class ItemService:
             self.repository = session_or_repo
             self.session = getattr(session_or_repo, "session", None)
 
-    async def create_item(self, item_in: ItemCreate, owner_id: int) -> TrackedItem:
+    async def create_item(
+        self, item_in: TrackedItemCreate, owner_id: int
+    ) -> TrackedItem:
         # 1. Generate text embedding
         embedding = embedding_service.generate_embedding(item_in.title)
 
@@ -60,8 +58,14 @@ class ItemService:
         )
         return item
 
-    async def get_item(self, item_id: int) -> TrackedItem | None:
-        return await self.repository.get_by_id(item_id)
+    async def get_item_by_id(self, item_id: int, owner_id: int) -> TrackedItem:
+        item = await self.repository.get_by_id(item_id)
+        if item is None or item.owner_id != owner_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Товар не знайдено",
+            )
+        return item
 
     async def get_user_items(
         self, owner_id: int, skip: int = 0, limit: int = 100
@@ -71,13 +75,18 @@ class ItemService:
         )
         return list(items)
 
-    async def update_item(self, item: TrackedItem, item_in: ItemUpdate) -> TrackedItem:
-        update_data = item_in.model_dump(exclude_unset=True)
-        if "title" in update_data and update_data["title"]:
+    async def update_item(
+        self, item_id: int, item_in: TrackedItemUpdate, owner_id: int
+    ) -> TrackedItem:
+        item = await self.get_item_by_id(item_id=item_id, owner_id=owner_id)
+
+        update_data = item_in.model_dump(exclude_unset=True, exclude_none=True)
+        if "title" in update_data:
             update_data["title_embedding"] = embedding_service.generate_embedding(
                 update_data["title"]
             )
         return await self.repository.update(item, **update_data)
 
-    async def delete_item(self, item: TrackedItem) -> None:
+    async def delete_item(self, item_id: int, owner_id: int) -> None:
+        item = await self.get_item_by_id(item_id=item_id, owner_id=owner_id)
         await self.repository.delete(item)

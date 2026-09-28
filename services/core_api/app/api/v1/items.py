@@ -91,4 +91,3 @@ async def delete_item(
     """Видаляє товар за ID."""
     item_service = ItemService(session)
     await item_service.delete_item(item_id=item_id, owner_id=current_user.id)
-    return None

@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
-
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
