@@ -43,10 +43,18 @@ jobs:
           pip install -r services/core_api/requirements.txt
           pip install pytest pytest-asyncio pytest-env httpx greenlet
 
+      # Модель ембеддингів (~220 МБ) кешується між запусками CI
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fastembed
+          key: fastembed-${{ hashFiles('services/core_api/app/core/config.py') }}
+
       - name: Run Pytest
         working-directory: services/core_api
         env:
           DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_db
+          EMBEDDING_CACHE_DIR: /home/runner/.cache/fastembed
           PYTHONPATH: .
         run: |
           pytest tests/ -v

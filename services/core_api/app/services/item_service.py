@@ -13,7 +13,9 @@ from app.services.embedding_service import embedding_service
 logger = logging.getLogger(__name__)
 
 # Косинусна відстань: 0 — однакові за змістом, 1 — не пов'язані, 2 — протилежні
-SIMILARITY_MAX_DISTANCE = 0.25
+# Підібрано під paraphrase-multilingual-MiniLM: однакові товари (у т.ч. EN↔UA)
+# дають до ~0.27, різні — від ~0.46. Поріг посередині розриву.
+SIMILARITY_MAX_DISTANCE = 0.35
 
 
 class ItemService:

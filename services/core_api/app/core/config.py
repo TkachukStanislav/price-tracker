@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     SCRAPER_QUEUE_NAME: str = "price_scraping_tasks"
     PRICE_UPDATED_QUEUE_NAME: str = "price_updated_events"
 
+    # Ембеддинги (fastembed). Після зміни моделі треба перерахувати вектори:
+    # python -m app.scripts.reembed_items
+    EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    EMBEDDING_CACHE_DIR: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

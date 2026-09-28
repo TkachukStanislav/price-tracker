@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from app.services.embedding_service import embedding_service
+from app.services.item_service import SIMILARITY_MAX_DISTANCE
 
 
 def test_embedding_output_structure():
@@ -38,23 +40,13 @@ def test_semantic_similarity_deduplication():
     vec_b = embedding_service.generate_embedding(item_b)
     vec_diff = embedding_service.generate_embedding(unrelated_item)
 
-    # Рахуємо схожість
-    similarity_same = cosine_similarity(vec_a, vec_b)
-    similarity_diff = cosine_similarity(vec_a, vec_diff)
+    # Рахуємо косинусну відстань
+    distance_same = 1 - cosine_similarity(vec_a, vec_b)
+    distance_diff = 1 - cosine_similarity(vec_a, vec_diff)
 
-    # 3. Assert:
-    # Схожі товари мають високу подібність
-    assert (
-        similarity_same > 0.80
-    ), f"Очікували високу схожість, отримали {similarity_same}"
-
-    # Сторонній товар помітно нижчий за порогом
-    assert (
-        similarity_diff < 0.65
-    ), f"Очікували низьку схожість, отримали {similarity_diff}"
-
-    # Різниця між схожим і несхожим товаром суттєва (> 0.15)
-    assert (similarity_same - similarity_diff) > 0.15
+    # 3. Assert: той самий товар — в межах порогу, сторонній — за ним
+    assert distance_same < SIMILARITY_MAX_DISTANCE, f"Відстань {distance_same}"
+    assert distance_diff > SIMILARITY_MAX_DISTANCE, f"Відстань {distance_diff}"
 
 
 async def test_async_embedding_matches_sync():
@@ -64,3 +56,32 @@ async def test_async_embedding_matches_sync():
     async_vector = await embedding_service.generate_embedding_async(text)
 
     assert async_vector == sync_vector
+
+
+@pytest.mark.parametrize(
+    ("text_a", "text_b"),
+    [
+        ("Електрочайник", "Мікрохвильова піч"),
+        ("Дитячий велосипед", "Зимова куртка"),
+        ("Навушники Sony WH-1000XM5", "Кавоварка DeLonghi Magnifica"),
+    ],
+)
+def test_different_ukrainian_items_are_not_similar(text_a: str, text_b: str):
+    # Регресія: англомовна bge-small-en вважала різні українські товари схожими
+    # (відстань "Електрочайник" ↔ "Мікрохвильова піч" була 0.18 < порогу 0.25)
+    vec_a = embedding_service.generate_embedding(text_a)
+    vec_b = embedding_service.generate_embedding(text_b)
+
+    distance = 1 - cosine_similarity(vec_a, vec_b)
+
+    assert distance > SIMILARITY_MAX_DISTANCE
+
+
+def test_batch_embeddings_match_single():
+    texts = ["Apple iPhone 15 Pro", "Пральна машина Samsung"]
+
+    batch = embedding_service.generate_embeddings(texts)
+
+    assert len(batch) == 2
+    for text, vector in zip(texts, batch, strict=True):
+        assert vector == pytest.approx(embedding_service.generate_embedding(text))
