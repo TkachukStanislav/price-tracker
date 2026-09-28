@@ -2,6 +2,7 @@ import os
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-import app.models  # noqa: F401
+import app.models
 from app.core.database import Base, get_async_session
 from app.main import app
 
@@ -60,8 +61,20 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 await trans.rollback()
 
 
+@pytest.fixture
+def mock_publish():
+    """Підміняє публікацію в RabbitMQ і дає тесту доступ до моку."""
+    with patch(
+        "app.core.rabbitmq.rabbitmq_client.publish_message",
+        new_callable=AsyncMock,
+    ) as mock:
+        yield mock
+
+
 @pytest_asyncio.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def client(
+    db_session: AsyncSession, mock_publish: AsyncMock
+) -> AsyncGenerator[AsyncClient, None]:
     """Створює тестовий клієнт із підміненою сесією та замоканим RabbitMQ."""
 
     async def _override_get_async_session():
