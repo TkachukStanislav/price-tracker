@@ -1,5 +1,6 @@
-from app.services.embedding_service import embedding_service
 import numpy as np
+
+from app.services.embedding_service import embedding_service
 
 
 def test_embedding_output_structure():
