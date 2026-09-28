@@ -9,8 +9,8 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.4
+    rev: v0.16.9  # має збігатися з ruff у requirements-dev.txt
     hooks:
       - id: ruff
-        args: [--fix, --ignore=E402]
+        args: [--fix]
       - id: ruff-format
