@@ -1,12 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_async_session
 from app.models.user import User
 from app.schemas.item import (
+    SimilarItemResponse,
     TrackedItemCreate,
     TrackedItemResponse,
     TrackedItemUpdate,
@@ -60,6 +61,23 @@ async def read_item_by_id(
     """Отримує один конкретний товар за ID з перевіркою доступу."""
     item_service = ItemService(session)
     return await item_service.get_item_by_id(item_id=item_id, owner_id=current_user.id)
+
+
+@router.get(
+    "/{item_id}/similar",
+    response_model=list[SimilarItemResponse],
+)
+async def read_similar_items(
+    item_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+):
+    """Повертає схожі за назвою товари поточного користувача (векторний пошук)."""
+    item_service = ItemService(session)
+    return await item_service.get_similar_items(
+        item_id=item_id, owner_id=current_user.id, limit=limit
+    )
 
 
 @router.patch(

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -13,6 +13,15 @@ if TYPE_CHECKING:
 
 class TrackedItem(Base):
     __tablename__ = "tracked_items"
+    __table_args__ = (
+        # HNSW-індекс для швидкого пошуку найближчих векторів за косинусною відстанню
+        Index(
+            "ix_tracked_items_title_embedding_hnsw",
+            "title_embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"title_embedding": "vector_cosine_ops"},
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

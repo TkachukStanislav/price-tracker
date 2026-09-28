@@ -27,16 +27,22 @@ class ItemRepository(BaseRepository[TrackedItem]):
         result = await self.session.execute(query)
         return result.scalars().all()
 
-    async def find_similar_by_embedding(
-        self, embedding: list[float], threshold: float = 0.25
-    ) -> TrackedItem | None:
-        distance_expr = TrackedItem.title_embedding.cosine_distance(embedding)
+    async def find_similar(
+        self, item: TrackedItem, max_distance: float, limit: int
+    ) -> list[tuple[TrackedItem, float]]:
+        """Шукає товари того ж власника, найближчі за косинусною відстанню."""
+        if item.title_embedding is None:
+            return []
+
+        distance = TrackedItem.title_embedding.cosine_distance(item.title_embedding)
         query = (
-            select(TrackedItem)
+            select(TrackedItem, distance.label("distance"))
+            .where(TrackedItem.owner_id == item.owner_id)
+            .where(TrackedItem.id != item.id)
             .where(TrackedItem.title_embedding.is_not(None))
-            .where(distance_expr < threshold)
-            .order_by(distance_expr)
-            .limit(1)
+            .where(distance < max_distance)
+            .order_by(distance)
+            .limit(limit)
         )
         result = await self.session.execute(query)
-        return result.scalars().first()
+        return [(row.TrackedItem, row.distance) for row in result]
