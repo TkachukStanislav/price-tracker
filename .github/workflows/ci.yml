@@ -51,10 +51,34 @@ jobs:
         run: |
           pytest tests/ -v
 
+  test-scraper:
+    name: Run Scraper Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r services/scraper_service/requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run Pytest
+        working-directory: services/scraper_service
+        run: pytest -v
+
   # ================= CD: ЗБІРКА ТА ПУБЛІКАЦІЯ ОБРАЗІВ =================
   build-images:
     name: Build & Push Docker Images
-    needs: test
+    needs: [test, test-scraper]
     runs-on: ubuntu-latest
     permissions:
       contents: read
