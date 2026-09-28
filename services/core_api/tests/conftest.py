@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 # Додай це у верхній блок імпортів conftest.py:
 import app.models  # noqa: F401 (або конкретні моделі: from app.models.user import User)
+from sqlalchemy import text
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -39,10 +40,8 @@ TestAsyncSessionLocal = async_sessionmaker(
 async def prepare_database():
     """Створює структуру таблиць перед початком тестів і видаляє після."""
     async with test_engine.begin() as conn:
-        # Увімкнення розширення vector (для pgvector)
-        await conn.execute(
-            Base.metadata.schema and "" or "CREATE EXTENSION IF NOT EXISTS vector;"
-        )
+        # Обгортаємо сирий SQL у text()
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield
