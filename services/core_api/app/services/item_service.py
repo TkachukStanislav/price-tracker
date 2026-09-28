@@ -26,7 +26,7 @@ class ItemService:
         self, item_in: TrackedItemCreate, owner_id: int
     ) -> TrackedItem:
         # 1. Generate text embedding
-        embedding = embedding_service.generate_embedding(item_in.title)
+        embedding = await embedding_service.generate_embedding_async(item_in.title)
 
         # 2. Semantic deduplication check
         similar_item = await self.repository.find_similar_by_embedding(
@@ -82,9 +82,9 @@ class ItemService:
 
         update_data = item_in.model_dump(exclude_unset=True, exclude_none=True)
         if "title" in update_data:
-            update_data["title_embedding"] = embedding_service.generate_embedding(
-                update_data["title"]
-            )
+            new_title = update_data["title"]
+            embedding = await embedding_service.generate_embedding_async(new_title)
+            update_data["title_embedding"] = embedding
         return await self.repository.update(item, **update_data)
 
     async def delete_item(self, item_id: int, owner_id: int) -> None:
