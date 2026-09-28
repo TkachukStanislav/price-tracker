@@ -1,22 +1,30 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
-# Базова схема із загальними полями
+# Base schema with shared attributes
 class UserBase(BaseModel):
     email: EmailStr
 
 
-# Схема для реєстрації (вхідні дані: пароль обов'язковий)
-class UserCreate(UserBase):
-    password: str = Field(min_length=6, max_length=100)
+# Schema for user registration
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def check_password_length(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes")
+        return v
 
 
-# Схема для повернення користувача клієнту (пароль приховано!)
+# Response schema sent back to client (never exposes password)
 class UserResponse(UserBase):
     id: int
     is_active: bool
     created_at: datetime
 
-    # Дозволяє Pydantic читати дані прямо з об'єктів SQLAlchemy ORM
     model_config = ConfigDict(from_attributes=True)
