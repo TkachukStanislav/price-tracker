@@ -19,7 +19,7 @@
 
 * **Backend:** Python 3.11+, FastAPI (повністю асинхронний пайплайн), Pydantic v2
 * **База даних та вектори:** PostgreSQL 16, розширення `pgvector`, SQLAlchemy 2.0 (asyncpg), міграції Alembic
-* **ML / Ембеддинги:** `fastembed` (локальний ONNX Runtime, без платних зовнішніх API на кшталт OpenAI)
+* **ML / Ембеддинги:** `fastembed` з мультимовною моделлю `paraphrase-multilingual-MiniLM-L12-v2` (локальний ONNX Runtime, без платних зовнішніх API на кшталт OpenAI)
 * **Асинхронний брокер та кеш:** RabbitMQ, Redis
 * **Інфраструктура та UI:** Docker Compose, інтегрований Tailwind CSS дашборд
 
@@ -47,11 +47,17 @@
 ## Швидкий запуск
 
 ```bash
-git clone [https://github.com/TkachukStanislav/price-tracker.git](https://github.com/TkachukStanislav/price-tracker.git)
+git clone https://github.com/TkachukStanislav/price-tracker.git
 cd price-tracker
 cp .env.example .env
 docker compose up --build -d
 docker compose exec core_api alembic upgrade head
+```
+
+Після зміни моделі ембеддингів (`EMBEDDING_MODEL`) перерахуйте вектори наявних товарів:
+
+```bash
+docker compose exec core_api python -m app.scripts.reembed_items
 ```
 
 Точки доступу

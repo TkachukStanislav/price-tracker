@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 from httpx import AsyncClient
 
 from app.core.config import settings
+from app.services.item_service import SIMILARITY_MAX_DISTANCE
 
 AUTH_PREFIX = f"{settings.API_V1_STR}/auth"
 ITEMS_PREFIX = f"{settings.API_V1_STR}/items"
@@ -177,7 +178,7 @@ async def test_similar_items_returns_close_own_items(client: AsyncClient):
     results = response.json()
     # Лише схожий товар цього ж користувача: без себе, пральки і чужого iPhone
     assert [result["item"]["id"] for result in results] == [close["id"]]
-    assert 0 <= results[0]["distance"] < 0.25
+    assert 0 <= results[0]["distance"] < SIMILARITY_MAX_DISTANCE
 
 
 async def test_similar_items_of_another_user_returns_404(client: AsyncClient):

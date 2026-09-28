@@ -5,6 +5,7 @@ networks:
 volumes:
   pgdata:
   redis_data:
+  fastembed_cache:
 
 services:
   # 1. База даних PostgreSQL з підтримкою векторів (pgvector)
@@ -58,10 +59,14 @@ services:
       - tracker-network
     volumes:
       - ./services/core_api:/app
+      # Модель ембеддингів не завантажується заново після перестворення контейнера
+      - fastembed_cache:/models
     ports:
       - "${CORE_API_PORT}:8000"
     env_file:
       - .env
+    environment:
+      EMBEDDING_CACHE_DIR: /models
     depends_on:
       - db
       - redis
