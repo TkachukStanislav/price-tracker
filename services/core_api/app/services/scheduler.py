@@ -52,8 +52,8 @@ class PriceCheckScheduler:
                 await self.check_all_items()
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.error(f"[SCHEDULER] Помилка під час періодичної перевірки: {e}")
+            except Exception:  # цикл не має вмирати через одну помилку
+                logger.exception("[SCHEDULER] Помилка під час періодичної перевірки")
 
     def stop(self) -> None:
         self._is_running = False

@@ -1,4 +1,5 @@
 import logging
+
 from fastembed import TextEmbedding
 
 logger = logging.getLogger(__name__)
@@ -14,9 +15,9 @@ class EmbeddingService:
         try:
             embeddings = list(self.model.embed([text]))
             return embeddings[0].tolist()
-        except Exception as e:
-            logger.error(f"Помилка генерації ембеддингу: {e}")
-            raise e
+        except Exception:
+            logger.exception("Помилка генерації ембеддингу")
+            raise
 
 
 embedding_service = EmbeddingService()

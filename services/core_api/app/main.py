@@ -1,10 +1,9 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
-import os
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-
 
 from app.api.v1 import api_router
 from app.core.config import settings
