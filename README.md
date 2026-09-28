@@ -82,3 +82,25 @@ docker compose exec core_api python -m app.scripts.reembed_items
 Веб-дашборд: http://localhost:8000/
 Swagger документація API: http://localhost:8000/docs
 RabbitMQ Dashboard: http://localhost:15672 (Логін/Пароль: guest / guest)
+
+---
+
+## 📈 Моніторинг
+
+| Що | Адреса |
+|---|---|
+| Grafana, дашборд **Price Tracker** | http://localhost:3000 (admin / admin) |
+| Prometheus | http://localhost:9090 |
+| Сирі метрики API | http://localhost:8000/metrics |
+
+Prometheus кожні 15 секунд забирає `/metrics` з `core_api`, `price_consumer`, `scraper_service`, `notifier_service` і RabbitMQ (вбудований плагін `rabbitmq_prometheus`). Дашборд і datasource Grafana підключаються автоматично з `monitoring/grafana`.
+
+Основні метрики:
+
+| Метрика | Що показує |
+|---|---|
+| `http_requests_total`, `http_request_duration_seconds` | Трафік, коди відповідей і затримки API за шаблоном маршруту |
+| `scrape_results_total{result}` | Скільки цін отримано / взято з кешу / не вдалося отримати |
+| `price_updates_total{result}` | Оновлення цін, записані в БД |
+| `rabbitmq_queue_messages_ready` | Черги, що накопичуються (споживачі не встигають) |
+| `embedding_duration_seconds` | Час обчислення векторів |

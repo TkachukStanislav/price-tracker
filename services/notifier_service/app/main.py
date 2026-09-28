@@ -1,7 +1,8 @@
 import asyncio
 from contextlib import asynccontextmanager
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.core.config import settings
 from app.services.worker import notification_worker
@@ -30,3 +31,8 @@ app = FastAPI(
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {"service": "notifier_service", "status": "online"}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

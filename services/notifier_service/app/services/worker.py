@@ -3,10 +3,16 @@ import json
 import logging
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
+from prometheus_client import Counter
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+NOTIFICATIONS_SENT = Counter(
+    "notifications_sent_total",
+    "Надіслані сповіщення про зниження ціни",
+)
 
 
 class NotificationWorker:
@@ -31,6 +37,7 @@ class NotificationWorker:
         )
 
         logger.info("\n" + "=" * 50 + f"\n{message_text}\n" + "=" * 50)
+        NOTIFICATIONS_SENT.inc()
 
     async def process_message(self, message: AbstractIncomingMessage) -> None:
         """Обробляє повідомлення з черги сповіщень."""

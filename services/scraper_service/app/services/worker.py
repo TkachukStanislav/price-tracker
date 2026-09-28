@@ -6,6 +6,7 @@ from aio_pika import Message
 from aio_pika.abc import AbstractIncomingMessage
 
 from app.core.config import settings
+from app.core.metrics import PRICE_ALERTS, SCRAPE_DURATION, SCRAPE_RESULTS
 from app.core.redis import redis_client
 from app.services.scraper import PriceScraper
 
@@ -78,10 +79,12 @@ class ScraperWorker:
             price = await redis_client.get_cached_price(ticker_or_url)
 
             if price is not None:
+                SCRAPE_RESULTS.labels("cache_hit").inc()
                 logger.info(f"[CACHE HIT] Ціна з Redis: {price} для {ticker_or_url}")
             else:
                 # 2. Якщо немає в кеші — скрапимо
-                price = await PriceScraper.fetch_price(ticker_or_url)
+                with SCRAPE_DURATION.time():
+                    price = await PriceScraper.fetch_price(ticker_or_url)
                 if price is not None:
                     await redis_client.set_cached_price(ticker_or_url, price)
                     logger.info(
@@ -104,6 +107,7 @@ class ScraperWorker:
                     "target_price": target_price,
                 }
                 await self.publish_alert(alert_payload)
+                PRICE_ALERTS.inc()
 
     async def start(self) -> None:
         self.connection = await aio_pika.connect_robust(settings.rabbitmq_url)

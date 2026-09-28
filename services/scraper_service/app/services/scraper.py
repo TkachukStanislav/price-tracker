@@ -4,6 +4,8 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
+from app.core.metrics import SCRAPE_RESULTS
+
 logger = logging.getLogger(__name__)
 
 HEADERS = {
@@ -32,6 +34,7 @@ class PriceScraper:
         """Повертає ціну зі сторінки або None, якщо отримати її не вдалося."""
         if not ticker_or_url.startswith(("http://", "https://")):
             logger.warning("Непідтримуване джерело ціни: %s", ticker_or_url)
+            SCRAPE_RESULTS.labels("unsupported").inc()
             return None
 
         try:
@@ -40,12 +43,16 @@ class PriceScraper:
                 response.raise_for_status()
         except httpx.HTTPError as e:
             logger.warning("Не вдалося завантажити %s: %s", ticker_or_url, e)
+            SCRAPE_RESULTS.labels("fetch_error").inc()
             return None
 
         soup = BeautifulSoup(response.text, "html.parser")
         price_element = soup.find(class_=PRICE_CLASS_PATTERN)
         if price_element is None:
             logger.warning("Ціну не знайдено на сторінці %s", ticker_or_url)
+            SCRAPE_RESULTS.labels("not_found").inc()
             return None
 
-        return parse_price(price_element.get_text())
+        price = parse_price(price_element.get_text())
+        SCRAPE_RESULTS.labels("success" if price is not None else "not_found").inc()
+        return price

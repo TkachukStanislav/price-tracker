@@ -11,12 +11,20 @@ import signal
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
+from prometheus_client import Counter, start_http_server
 
 from app.core.config import settings
 from app.core.database import async_session_maker
 from app.repositories.item import ItemRepository
 
 logger = logging.getLogger(__name__)
+
+METRICS_PORT = 9100
+PRICE_UPDATES = Counter(
+    "price_updates_total",
+    "Оброблені події оновлення ціни",
+    ["result"],
+)
 
 
 class PriceUpdateConsumer:
@@ -30,16 +38,20 @@ class PriceUpdateConsumer:
             current_price = payload.get("current_price")
 
             if not item_id or current_price is None:
+                PRICE_UPDATES.labels("invalid").inc()
                 return
 
             async with async_session_maker() as session:
                 item_repo = ItemRepository(session)
                 item = await item_repo.get_by_id(item_id)
-                if item:
-                    await item_repo.update(item, current_price=current_price)
-                    logger.info(
-                        "Товар #%s отримав current_price = %s", item_id, current_price
-                    )
+                if item is None:
+                    PRICE_UPDATES.labels("item_not_found").inc()
+                    return
+                await item_repo.update(item, current_price=current_price)
+                PRICE_UPDATES.labels("updated").inc()
+                logger.info(
+                    "Товар #%s отримав current_price = %s", item_id, current_price
+                )
 
     async def start(self) -> None:
         """Підключається до RabbitMQ і починає слухати чергу (не блокує)."""
@@ -74,6 +86,8 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
 
+    # Окремий процес без FastAPI, тому метрики віддає вбудований HTTP-сервер
+    start_http_server(METRICS_PORT)
     await price_update_consumer.start()
     await stop_event.wait()
     await price_update_consumer.stop()
