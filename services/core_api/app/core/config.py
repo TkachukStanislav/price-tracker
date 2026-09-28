@@ -24,9 +24,18 @@ class Settings(BaseSettings):
     SCRAPER_QUEUE_NAME: str = "price_scraping_tasks"
     PRICE_UPDATED_QUEUE_NAME: str = "price_updated_events"
 
-    # Redis (result backend для Celery)
+    # Redis: result backend Celery, rate limiting, кеш
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
+
+    # Rate limiting (спроб з однієї IP за вікно)
+    LOGIN_RATE_LIMIT: int = 5
+    LOGIN_RATE_WINDOW_SECONDS: int = 60
+    REGISTER_RATE_LIMIT: int = 10
+    REGISTER_RATE_WINDOW_SECONDS: int = 3600
+
+    # Кеш результатів векторного пошуку /items/{id}/similar
+    SIMILAR_CACHE_TTL_SECONDS: int = 300
 
     # Celery beat: як часто ставити всі товари на перевірку ціни
     PRICE_CHECK_INTERVAL_SECONDS: int = 60

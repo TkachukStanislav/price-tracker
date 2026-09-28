@@ -41,7 +41,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r services/core_api/requirements.txt
-          pip install pytest pytest-asyncio pytest-env httpx greenlet
+          pip install pytest pytest-asyncio pytest-env httpx greenlet fakeredis
 
       # Модель ембеддингів (~220 МБ) кешується між запусками CI
       - name: Cache embedding model

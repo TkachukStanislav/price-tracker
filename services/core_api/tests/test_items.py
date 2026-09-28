@@ -1,8 +1,9 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from httpx import AsyncClient
 
 from app.core.config import settings
+from app.repositories.item import ItemRepository
 from app.services.item_service import SIMILARITY_MAX_DISTANCE
 
 AUTH_PREFIX = f"{settings.API_V1_STR}/auth"
@@ -202,3 +203,35 @@ async def test_similar_items_rejects_invalid_limit(client: AsyncClient):
     )
 
     assert response.status_code == 422
+
+
+async def test_similar_items_are_cached(client: AsyncClient):
+    headers = await get_auth_headers(client, "cache_owner@example.com")
+    source = await create_item(client, headers, title="Apple iPhone 15 Pro 128GB")
+    await create_item(client, headers, title="Apple iPhone 15 Pro 256GB")
+    url = f"{ITEMS_PREFIX}/{source['id']}/similar"
+
+    with patch.object(
+        ItemRepository,
+        "find_similar",
+        autospec=True,
+        side_effect=ItemRepository.find_similar,
+    ) as find_similar:
+        first = await client.get(url, headers=headers)
+        second = await client.get(url, headers=headers)
+
+    assert first.json() == second.json()
+    # Другий запит узято з кешу: векторний пошук виконано лише раз
+    assert find_similar.await_count == 1
+
+
+async def test_similar_cache_is_invalidated_on_new_item(client: AsyncClient):
+    headers = await get_auth_headers(client, "cache_inval@example.com")
+    source = await create_item(client, headers, title="Apple iPhone 15 Pro 128GB")
+    url = f"{ITEMS_PREFIX}/{source['id']}/similar"
+    assert (await client.get(url, headers=headers)).json() == []
+
+    new_item = await create_item(client, headers, title="Apple iPhone 15 Pro 256GB")
+
+    results = (await client.get(url, headers=headers)).json()
+    assert [result["item"]["id"] for result in results] == [new_item["id"]]

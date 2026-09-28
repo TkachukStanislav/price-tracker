@@ -2,6 +2,7 @@ import os
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
+import fakeredis
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -14,6 +15,7 @@ from sqlalchemy.pool import NullPool
 
 import app.models
 from app.core.database import Base, get_async_session
+from app.core.redis import get_redis
 from app.main import app
 
 TEST_DATABASE_URL = os.getenv(
@@ -71,16 +73,25 @@ def mock_publish():
         yield mock
 
 
+@pytest.fixture
+def fake_redis() -> fakeredis.FakeAsyncRedis:
+    """Redis у пам'яті, свіжий для кожного тесту (лічильники rate limit, кеш)."""
+    return fakeredis.FakeAsyncRedis(decode_responses=True)
+
+
 @pytest_asyncio.fixture
 async def client(
-    db_session: AsyncSession, mock_publish: AsyncMock
+    db_session: AsyncSession,
+    mock_publish: AsyncMock,
+    fake_redis: fakeredis.FakeAsyncRedis,
 ) -> AsyncGenerator[AsyncClient, None]:
-    """Створює тестовий клієнт із підміненою сесією та замоканим RabbitMQ."""
+    """Тестовий клієнт: тестова БД, fakeredis, замоканий RabbitMQ."""
 
     async def _override_get_async_session():
         yield db_session
 
     app.dependency_overrides[get_async_session] = _override_get_async_session
+    app.dependency_overrides[get_redis] = lambda: fake_redis
 
     with (
         patch("app.core.rabbitmq.rabbitmq_client.connect", new_callable=AsyncMock),
