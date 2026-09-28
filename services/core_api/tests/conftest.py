@@ -2,45 +2,37 @@ import os
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
-# Додай це у верхній блок імпортів conftest.py:
-import app.models  # noqa: F401 (або конкретні моделі: from app.models.user import User)
-from sqlalchemy import text
-
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
-    async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
+import app.models  # noqa: F401
 from app.core.database import Base, get_async_session
 from app.main import app
 
-# Використовуємо тестову URL із змінних середовища або дефолтне значення
 TEST_DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://test_user:test_password@localhost:5432/test_db",
 )
 
+# NullPool guarantees connections are not reused across distinct event loops
 test_engine = create_async_engine(
     TEST_DATABASE_URL,
+    poolclass=NullPool,
     echo=False,
     future=True,
-)
-
-TestAsyncSessionLocal = async_sessionmaker(
-    bind=test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
 )
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def prepare_database():
-    """Створює структуру таблиць перед початком тестів і видаляє після."""
+    """Створює структуру таблиць та розширення vector перед початком тестів."""
     async with test_engine.begin() as conn:
-        # Обгортаємо сирий SQL у text()
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
@@ -52,22 +44,31 @@ async def prepare_database():
 
 @pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Надає окрему транзакційну сесію для кожного тесту."""
-    async with TestAsyncSessionLocal() as session:
-        yield session
-        await session.rollback()
+    """Надає транзакційну сесію з savepoint для повної ізоляції кожного тесту."""
+    async with test_engine.connect() as conn:
+        trans = await conn.begin()
+        session = AsyncSession(
+            bind=conn,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        try:
+            yield session
+        finally:
+            await session.close()
+            if trans.is_active:
+                await trans.rollback()
 
 
 @pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """Створює тестовий HTTP-клієнт із підміною сесії бази та моком RabbitMQ."""
+    """Створює тестовий клієнт із підміненою сесією та замоканим RabbitMQ."""
 
     async def _override_get_async_session():
         yield db_session
 
     app.dependency_overrides[get_async_session] = _override_get_async_session
 
-    # Заглушаємо запуск фонових задач RabbitMQ, щоб тести не шукали брокер
     with (
         patch("app.core.rabbitmq.rabbitmq_client.connect", new_callable=AsyncMock),
         patch("app.core.rabbitmq.rabbitmq_client.close", new_callable=AsyncMock),
