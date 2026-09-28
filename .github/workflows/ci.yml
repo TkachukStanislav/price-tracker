@@ -7,12 +7,11 @@ on:
     branches: [ main ]
 
 jobs:
-  # ================= CI: TESTING =================
+  # ================= CI: ТЕСТУВАННЯ =================
   test:
     name: Run Pytest Suite
     runs-on: ubuntu-latest
 
-    # Поднимаем временную базу PostgreSQL с расширением pgvector
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -48,10 +47,11 @@ jobs:
         working-directory: services/core_api
         env:
           DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_db
+          PYTHONPATH: .
         run: |
           pytest tests/ -v
 
-  # ================= CD: BUILD & PUBLISH =================
+  # ================= CD: ЗБІРКА ТА ПУБЛІКАЦІЯ ОБРАЗІВ =================
   build-images:
     name: Build & Push Docker Images
     needs: test
@@ -96,10 +96,3 @@ jobs:
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-      - name: Run Pytest
-        working-directory: services/core_api
-        env:
-          DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_db
-          PYTHONPATH: .
-        run: |
-          pytest tests/ -v
