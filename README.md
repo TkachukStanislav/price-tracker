@@ -68,9 +68,21 @@
 git clone https://github.com/TkachukStanislav/price-tracker.git
 cd price-tracker
 cp .env.example .env
+# Задайте SECRET_KEY у .env (мінімум 32 символи):
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
 docker compose up --build -d
-docker compose exec core_api alembic upgrade head
 ```
+
+Міграції БД виконуються автоматично: сервіс `migrate` запускає `alembic upgrade head`, і лише після його успішного завершення стартують API та фонові процеси. Сервіси чекають, поки PostgreSQL, Redis і RabbitMQ пройдуть healthcheck.
+
+**Режими запуску:**
+
+| Команда | Що відбувається |
+|---|---|
+| `docker compose up -d` | Розробка: підключається `docker-compose.override.yml` — код монтується з диска, HTTP-сервіси перезапускаються при змінах (`--reload`) |
+| `docker compose -f docker-compose.yml up -d` | Як у продакшені: код усередині образів, без `--reload` |
+
+Образи збираються в два етапи (multi-stage): залежності встановлюються в окремому етапі, а у фінальний образ потрапляють лише віртуальне оточення й код. Процеси працюють від непривілейованого користувача `app`.
 
 Після зміни моделі ембеддингів (`EMBEDDING_MODEL`) перерахуйте вектори наявних товарів:
 

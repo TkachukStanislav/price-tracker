@@ -1,5 +1,17 @@
+# Базова конфігурація: образи запускаються так, як у продакшені
+# (код усередині образу, без --reload). Для розробки поверх неї автоматично
+# підключається docker-compose.override.yml. Запуск без dev-налаштувань:
+#   docker compose -f docker-compose.yml up -d
+
+# Перевірка «сервіс відповідає на /health» без curl в образі
+x-http-healthcheck: &http-healthcheck
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+
 # Спільні налаштування для всіх процесів, що запускаються з образу core_api
-# (API, слухач оновлень цін, Celery worker і beat). Підключаються через <<: *core-app
+# (міграції, API, слухач оновлень цін, Celery worker і beat)
 x-core-app: &core-app
   build: ./services/core_api
   image: price-tracker/core_api:dev
@@ -7,7 +19,6 @@ x-core-app: &core-app
   networks:
     - tracker-network
   volumes:
-    - ./services/core_api:/app
     # Модель ембеддингів не завантажується заново після перестворення контейнера
     - fastembed_cache:/models
   env_file:
@@ -15,9 +26,14 @@ x-core-app: &core-app
   environment:
     EMBEDDING_CACHE_DIR: /models
   depends_on:
-    - db
-    - redis
-    - rabbitmq
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
 
 networks:
   tracker-network:
@@ -46,8 +62,13 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # 2. In-memory кеш Redis
+  # 2. Redis: кеш, rate limiting, result backend Celery
   redis:
     image: redis:7-alpine
     container_name: tracker_redis
@@ -58,6 +79,11 @@ services:
       - "${REDIS_PORT}:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # 3. Брокер повідомлень RabbitMQ з вебінтерфейсом
   rabbitmq:
@@ -72,67 +98,97 @@ services:
     ports:
       - "${RABBITMQ_PORT}:5672"
       - "${RABBITMQ_UI_PORT}:15672"
+    healthcheck:
+      # ping лише перевіряє, що вузол живий; check_port_connectivity — що AMQP-порт
+      # уже приймає з'єднання (інакше сервіси стартують раніше і падають)
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
 
-  # 4. Головний API-сервіс (Core API)
+  # 4. Міграції БД: виконуються один раз перед стартом сервісів core_api
+  migrate:
+    <<: *core-app
+    container_name: tracker_migrate
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # 5. Головний API-сервіс (Core API)
   core_api:
     <<: *core-app
     container_name: tracker_core_api
     ports:
       - "${CORE_API_PORT}:8000"
+    healthcheck:
+      <<: *http-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
 
-  # 4.1 Слухач подій оновлення цін (пише current_price у БД)
+  # 5.1 Слухач подій оновлення цін (пише current_price у БД)
   price_consumer:
     <<: *core-app
     container_name: tracker_price_consumer
     command: ["python", "-m", "app.services.price_consumer"]
+    healthcheck:
+      <<: *http-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9100/metrics', timeout=3)"]
 
-  # 4.2 Celery worker: виконує фонові задачі. Без container_name, щоб можна було
+  # 5.2 Celery worker: виконує фонові задачі. Без container_name, щоб можна було
   # масштабувати: docker compose up -d --scale celery_worker=3
   celery_worker:
     <<: *core-app
     command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
 
-  # 4.3 Celery beat: розклад задач. Завжди рівно ОДИН екземпляр, інакше задачі дублюються
+  # 5.3 Celery beat: розклад задач. Завжди рівно ОДИН екземпляр, інакше задачі дублюються
   celery_beat:
     <<: *core-app
     container_name: tracker_celery_beat
     command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=info", "--schedule", "/tmp/celerybeat-schedule"]
 
-  # 5. Сервіс збору та моніторингу цін
+  # 6. Сервіс збору та моніторингу цін
   scraper_service:
     build: ./services/scraper_service
     container_name: tracker_scraper_service
     restart: unless-stopped
     networks:
       - tracker-network
-    volumes:
-      - ./services/scraper_service:/app
     ports:
       - "${SCRAPER_PORT}:8001"
     env_file:
       - .env
     depends_on:
-      - redis
-      - rabbitmq
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      <<: *http-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
 
-  # 6. Сервіс сповіщень
+  # 7. Сервіс сповіщень
   notifier_service:
     build: ./services/notifier_service
     container_name: tracker_notifier_service
     restart: unless-stopped
     networks:
       - tracker-network
-    volumes:
-      - ./services/notifier_service:/app
     ports:
       - "${NOTIFIER_PORT}:8002"
     env_file:
       - .env
     depends_on:
-      - rabbitmq
-      - redis
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      <<: *http-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)"]
 
-  # 7. Prometheus: збирає метрики з усіх сервісів і RabbitMQ
+  # 8. Prometheus: збирає метрики з усіх сервісів і RabbitMQ
   prometheus:
     image: prom/prometheus:v2.54.1
     container_name: tracker_prometheus
@@ -145,7 +201,7 @@ services:
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
 
-  # 8. Grafana: дашборд і datasource підключаються автоматично (provisioning)
+  # 9. Grafana: дашборд і datasource підключаються автоматично (provisioning)
   grafana:
     image: grafana/grafana:11.2.0
     container_name: tracker_grafana
