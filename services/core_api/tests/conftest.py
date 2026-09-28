@@ -85,16 +85,6 @@ async def client(
     with (
         patch("app.core.rabbitmq.rabbitmq_client.connect", new_callable=AsyncMock),
         patch("app.core.rabbitmq.rabbitmq_client.close", new_callable=AsyncMock),
-        patch(
-            "app.services.price_consumer.price_update_consumer.start",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "app.services.price_consumer.price_update_consumer.stop",
-            new_callable=AsyncMock,
-        ),
-        patch("app.services.scheduler.price_scheduler.start", new_callable=AsyncMock),
-        patch("app.services.scheduler.price_scheduler.stop", new_callable=AsyncMock),
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

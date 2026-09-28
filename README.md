@@ -31,17 +31,35 @@
 [ Клієнт / Браузер ]
          │
          ▼
-[ FastAPI Core API ] ──( Генерація вектора: fastembed )
-         │                               │
-         │ (pgvector cosine search)      ▼
-         ├──────────────────────► [ PostgreSQL 16 ]
-         │
-         ▼ (Публікація задачі)
-    [ RabbitMQ ]
-         │
-         ▼ (Споживання черги)
-[ Scraper Worker ] ──► [ Зовнішні ресурси / Магазини ]
+[ core_api (FastAPI) ] ──► PostgreSQL 16 + pgvector (HNSW)
+         │ нові товари
+         ▼
+ [ celery_beat ] ─(раз на хвилину)─► [ celery_worker ] ─┐
+                                                        ▼
+                                  RabbitMQ: price_scraping_tasks
+                                                        │
+                                                        ▼
+                     [ scraper_service ] ◄──► Redis (кеш цін) ──► магазини
+                        │                         │
+       price_updated_events               price_alert_notifications
+                        ▼                         ▼
+              [ price_consumer ]          [ notifier_service ]
+               (current_price у БД)        (сповіщення)
 ```
+
+### Процеси
+
+| Сервіс | Що робить | Масштабування |
+|---|---|---|
+| `core_api` | Лише HTTP API | Горизонтально, скільки завгодно копій |
+| `price_consumer` | Слухає `price_updated_events`, пише ціни в БД | Кілька копій ділять чергу між собою |
+| `celery_worker` | Виконує фонові задачі Celery | `docker compose up -d --scale celery_worker=3` |
+| `celery_beat` | Розклад: раз на `PRICE_CHECK_INTERVAL_SECONDS` ставить товари на перевірку | **Рівно один екземпляр** |
+| `scraper_service` | Отримує ціни зі сторінок, кешує в Redis | Кілька копій ділять чергу |
+| `notifier_service` | Надсилає сповіщення про зниження ціни | Кілька копій ділять чергу |
+
+Фонові процеси винесені з API, щоб запуск кількох копій API не дублював розклад перевірок. Celery використовується для запланованих задач усередині сервісу, а обмін подіями між сервісами йде напряму через RabbitMQ (aio-pika).
+
 ---
 
 ## Швидкий запуск

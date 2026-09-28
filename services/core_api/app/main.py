@@ -1,4 +1,3 @@
-import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -8,24 +7,14 @@ from fastapi.responses import FileResponse
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.rabbitmq import rabbitmq_client
-from app.services.price_consumer import price_update_consumer
-from app.services.scheduler import price_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # API лише публікує задачі. Фонова робота живе в окремих процесах:
+    # price_consumer, celery_worker, celery_beat (див. docker-compose.yml)
     await rabbitmq_client.connect()
-    consumer_task = asyncio.create_task(price_update_consumer.start())
-    scheduler_task = asyncio.create_task(price_scheduler.start())
-
     yield
-
-    # Shutdown
-    scheduler_task.cancel()
-    price_scheduler.stop()
-    consumer_task.cancel()
-    await price_update_consumer.stop()
     await rabbitmq_client.close()
 
 

@@ -9,6 +9,7 @@ from app.models.item import TrackedItem
 from app.repositories.item import ItemRepository
 from app.schemas.item import TrackedItemCreate, TrackedItemUpdate
 from app.services.embedding_service import embedding_service
+from app.services.price_checks import build_scrape_task_payload
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +45,7 @@ class ItemService:
         # 3. Dispatch scraper event
         await rabbitmq_client.publish_message(
             queue_name=settings.SCRAPER_QUEUE_NAME,
-            payload={
-                "item_id": item.id,
-                "ticker_or_url": item.ticker_or_url,
-                "target_price": item.target_price,
-                "owner_id": item.owner_id,
-            },
+            payload=build_scrape_task_payload(item),
         )
         return item
 

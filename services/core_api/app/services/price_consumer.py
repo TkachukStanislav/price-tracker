@@ -1,6 +1,13 @@
+"""Слухає події оновлення цін від scraper_service і записує їх у БД.
+
+Працює окремим процесом (не всередині API), див. docker-compose.yml:
+    python -m app.services.price_consumer
+"""
+
 import asyncio
 import json
 import logging
+import signal
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
@@ -14,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class PriceUpdateConsumer:
     def __init__(self) -> None:
-        self.connection: aio_pika.RobustConnection | None = None
+        self.connection: aio_pika.abc.AbstractRobustConnection | None = None
 
     async def process_message(self, message: AbstractIncomingMessage) -> None:
         async with message.process():
@@ -25,17 +32,17 @@ class PriceUpdateConsumer:
             if not item_id or current_price is None:
                 return
 
-            # Створюємо власну асинхронну сесію до БД
             async with async_session_maker() as session:
                 item_repo = ItemRepository(session)
                 item = await item_repo.get_by_id(item_id)
                 if item:
                     await item_repo.update(item, current_price=current_price)
                     logger.info(
-                        f"[DB UPDATED] Товар #{item_id} отримав current_price = {current_price}"
+                        "Товар #%s отримав current_price = %s", item_id, current_price
                     )
 
     async def start(self) -> None:
+        """Підключається до RabbitMQ і починає слухати чергу (не блокує)."""
         self.connection = await aio_pika.connect_robust(settings.rabbitmq_url)
         channel = await self.connection.channel()
         queue = await channel.declare_queue(
@@ -44,13 +51,9 @@ class PriceUpdateConsumer:
         )
         await queue.consume(self.process_message)
         logger.info(
-            f"Слухач оновлення цін запущено на черзі: '{settings.PRICE_UPDATED_QUEUE_NAME}'"
+            "Слухач оновлення цін запущено на черзі '%s'",
+            settings.PRICE_UPDATED_QUEUE_NAME,
         )
-
-        try:
-            await asyncio.Future()
-        except asyncio.CancelledError:
-            pass
 
     async def stop(self) -> None:
         if self.connection and not self.connection.is_closed:
@@ -58,3 +61,24 @@ class PriceUpdateConsumer:
 
 
 price_update_consumer = PriceUpdateConsumer()
+
+
+async def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    # docker stop надсилає SIGTERM: коректно закриваємо з'єднання
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)
+
+    await price_update_consumer.start()
+    await stop_event.wait()
+    await price_update_consumer.stop()
+    logger.info("Слухач оновлення цін зупинено")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

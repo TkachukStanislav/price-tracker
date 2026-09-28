@@ -1,0 +1,35 @@
+"""Celery для фонових і запланованих задач core_api.
+
+Запуск (див. docker-compose.yml):
+    celery -A app.worker.celery_app worker   — виконує задачі (можна кілька)
+    celery -A app.worker.celery_app beat     — розклад (рівно один екземпляр)
+"""
+
+from celery import Celery
+
+from app.core.config import settings
+
+celery_app = Celery(
+    "core_api",
+    broker=settings.rabbitmq_url,
+    backend=settings.redis_url,
+    include=["app.worker.tasks"],
+)
+
+celery_app.conf.update(
+    timezone="UTC",
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    result_expires=3600,
+    task_time_limit=300,
+    beat_schedule={
+        "dispatch-price-checks": {
+            "task": "price_checks.dispatch",
+            "schedule": settings.PRICE_CHECK_INTERVAL_SECONDS,
+            # Якщо воркер лежав, запуски не накопичуються: застарілий
+            # (старший за один інтервал) просто відкидається
+            "options": {"expires": settings.PRICE_CHECK_INTERVAL_SECONDS},
+        },
+    },
+)

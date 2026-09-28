@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     SCRAPER_QUEUE_NAME: str = "price_scraping_tasks"
     PRICE_UPDATED_QUEUE_NAME: str = "price_updated_events"
 
+    # Redis (result backend для Celery)
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+
+    # Celery beat: як часто ставити всі товари на перевірку ціни
+    PRICE_CHECK_INTERVAL_SECONDS: int = 60
+
     # Ембеддинги (fastembed). Після зміни моделі треба перерахувати вектори:
     # python -m app.scripts.reembed_items
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -49,6 +56,10 @@ class Settings(BaseSettings):
             f"amqp://{self.RABBITMQ_USER}:{self.RABBITMQ_PASSWORD}"
             f"@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/"
         )
+
+    @property
+    def redis_url(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
 
 settings = Settings()
